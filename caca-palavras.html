@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caça-Palavras - Desafio das 30 Horas</title>
+<style>
+body {
+  font-family: "Poppins", sans-serif;
+  background: linear-gradient(135deg, #0077ff, #6aff5f);
+  color: #fff;
+  text-align: center;
+  padding: 20px;
+  margin: 0;
+}
+h1 {text-transform: uppercase; text-shadow:2px 2px #003366;}
+#info {display:flex; justify-content:center; gap:40px; font-size:1.2em; margin-bottom:15px;}
+#grid {display:grid; grid-template-columns:repeat(18, 30px); gap:3px; justify-content:center; margin:15px 0; user-select:none;}
+.cell {width:30px; height:30px; background: rgba(255,255,255,0.15); display:flex; justify-content:center; align-items:center; border-radius:5px; cursor:pointer; transition:0.2s; font-weight:bold;}
+.cell.found {background:#00e676;color:#000;}
+#word-list {background:rgba(0,0,0,0.3); padding:15px 25px; border-radius:10px; display:inline-block; text-align:left;}
+#word-list li {list-style:none; padding:3px 0;}
+#word-list li.found {text-decoration:line-through; color:#00e676;}
+#message {margin-top:20px; font-size:1.3em; font-weight:bold;}
+button {background:#004aad; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-size:1em; margin-top:15px; transition:0.2s;}
+button:hover {background:#003580;}
+</style>
+</head>
+<body>
+
+<h1>Desafio das 30 Horas 🧩</h1>
+<div id="info">
+  <div>⏱️ Tempo: <span id="timer">01:00</span></div>
+  <div>✅ Palavras encontradas: <span id="foundCount">0</span>/18</div>
+</div>
+<div id="grid"></div>
+<div id="word-list">
+<h2>Palavras</h2>
+<ul id="words"></ul>
+</div>
+<div id="message"></div>
+<button id="restart">🔁 Nova Rodada</button>
+
+<script>
+const words = ["AUXILIARES","CAMARA","COFEN","COREN","ENFERMAGEM","FNE","HORAS","JORNADA","JUSTICA","PACIENTES","PL2295","QUALIDADE","SAUDE","SEGURANCA","SENADO","TECNICOS","TRABALHO","TRINTA"];
+const gridSize = 18;
+const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+let gridMatrix = [];
+let timer, timeLeft = 60, foundWords = 0;
+
+const grid = document.getElementById("grid");
+const timerDisplay = document.getElementById("timer");
+const foundCount = document.getElementById("foundCount");
+const wordList = document.getElementById("words");
+const message = document.getElementById("message");
+const restartBtn = document.getElementById("restart");
+
+// Função utilitária para embaralhar array
+function shuffle(arr){return arr.sort(() => Math.random()-0.5);}
+
+// Cria grid vazio
+function createEmptyGrid(){gridMatrix = Array.from({length:gridSize}, ()=>Array(gridSize).fill(""));}
+
+// Posiciona as palavras aleatoriamente
+function placeWords(){
+  shuffle(words).forEach(word=>{
+    let placed = false;
+    let tries = 0;
+    while(!placed && tries<200){
+      tries++;
+      const dir = Math.floor(Math.random()*8);
+      const dx=[-1,-1,-1,0,0,1,1,1][dir];
+      const dy=[-1,0,1,-1,1,-1,0,1][dir];
+      const x = Math.floor(Math.random()*gridSize);
+      const y = Math.floor(Math.random()*gridSize);
+      if(canPlace(word,x,y,dx,dy)){
+        for(let i=0;i<word.length;i++) gridMatrix[y+i*dy][x+i*dx]=word[i];
+        placed=true;
+      }
+    }
+  });
+}
+
+function canPlace(word,x,y,dx,dy){
+  for(let i=0;i<word.length;i++){
+    const nx=x+i*dx, ny=y+i*dy;
+    if(nx<0||ny<0||nx>=gridSize||ny>=gridSize) return false;
+    if(gridMatrix[ny][nx] && gridMatrix[ny][nx]!==word[i]) return false;
+  }
+  return true;
+}
+
+// Preenche espaços vazios
+function fillEmpty(){
+  for(let y=0;y<gridSize;y++){
+    for(let x=0;x<gridSize;x++){
+      if(!gridMatrix[y][x]) gridMatrix[y][x]=letters[Math.floor(Math.random()*letters.length)];
+    }
+  }
+}
+
+// Renderiza a grade
+function renderGrid(){
+  grid.innerHTML="";
+  gridMatrix.flat().forEach((letter,i)=>{
+    const cell=document.createElement("div");
+    cell.classList.add("cell");
+    cell.dataset.index=i;
+    cell.dataset.x=i%gridSize;
+    cell.dataset.y=Math.floor(i/gridSize);
+    cell.textContent=letter;
+    grid.appendChild(cell);
+  });
+}
+
+// Renderiza lista de palavras
+function renderWordList(){
+  wordList.innerHTML="";
+  words.forEach(w=>{
+    const li=document.createElement("li");
+    li.textContent=w;
+    li.id=`word-${w}`;
+    wordList.appendChild(li);
+  });
+}
+
+// Função para detectar seleção de palavra inteira
+let selecting=false, startCell=null;
+grid.addEventListener("mousedown",e=>{
+  if(e.target.classList.contains("cell")){selecting=true; startCell=e.target;}
+});
+grid.addEventListener("mouseup",e=>{
+  if(!selecting) return;
+  selecting=false;
+  if(!startCell) return;
+  const endCell=e.target;
+  if(!endCell.classList.contains("cell")) return;
+  checkWordSelection(startCell,endCell);
+  startCell=null;
+});
+
+// Checa se a seleção corresponde a alguma palavra
+function checkWordSelection(start,end){
+  const x1=Number(start.dataset.x), y1=Number(start.dataset.y);
+  const x2=Number(end.dataset.x), y2=Number(end.dataset.y);
+
+  let dx=x2-x1, dy=y2-y1;
+  const steps=Math.max(Math.abs(dx),Math.abs(dy));
+  dx=dx/steps; dy=dy/steps;
+
+  let selected="";
+  const cells=[];
+  for(let i=0;i<=steps;i++){
+    const nx=x1+i*dx, ny=y1+i*dy;
+    const cell=grid.children[ny*gridSize+nx];
+    selected+=cell.textContent;
+    cells.push(cell);
+  }
+
+  for(let w of words){
+    if(selected===w || selected.split("").reverse().join("")===w){
+      cells.forEach(c=>c.classList.add("found"));
+      document.getElementById(`word-${w}`).classList.add("found");
+      foundWords++;
+      foundCount.textContent=foundWords;
+      if(foundWords===words.length){
+        message.textContent="🎉 Parabéns! Todas as palavras foram encontradas!";
+        clearInterval(timer);
+      }
+      return;
+    }
+  }
+}
+
+// Cronômetro
+function startTimer(){
+  clearInterval(timer);
+  timeLeft=60;
+  timerDisplay.textContent="01:00";
+  timer=setInterval(()=>{
+    timeLeft--;
+    const m=Math.floor(timeLeft/60);
+    const s=(timeLeft%60).toString().padStart(2,"0");
+    timerDisplay.textContent=`${m}:${s}`;
+    if(timeLeft<=0){
+      clearInterval(timer);
+      message.textContent="⏰ Tempo esgotado! Troque de equipe!";
+    }
+  },1000);
+}
+
+// Inicializa jogo
+function init(){
+  createEmptyGrid();
+  placeWords();
+  fillEmpty();
+  renderGrid();
+  renderWordList();
+  foundWords=0;
+  foundCount.textContent=0;
+  message.textContent="";
+  startTimer();
+}
+
+restartBtn.addEventListener("click", init);
+init();
+</script>
+
+</body>
+</html>
